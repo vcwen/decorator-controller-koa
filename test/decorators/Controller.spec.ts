@@ -6,7 +6,7 @@ describe('Controller', () => {
     @Controller
     class TestController {}
     const controller = Reflect.getMetadata(MetadataKey.CONTROLLER, TestController)
-    expect(controller).toEqual({ name: 'Test', path: 'tests', plural: 'tests' })
+    expect(controller).toEqual({ name: 'Test', path: '/tests', plural: 'tests', prefix: '' })
   })
 
   it('should return decorator function when schema options is set', () => {
@@ -27,6 +27,6 @@ describe('Controller', () => {
     @Controller({ plural: 'redapples' })
     class Test {}
     const controller = Reflect.getMetadata(MetadataKey.CONTROLLER, Test)
-    expect(controller).toEqual({ name: 'Test', path: 'redapples', plural: 'redapples' })
+    expect(controller).toEqual({ name: 'Test', path: '/redapples', plural: 'redapples', prefix: '' })
   })
 })

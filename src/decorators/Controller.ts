@@ -23,15 +23,12 @@ export interface ICtrlMetadata {
 
 const getCtrlMetadata = (options, constructor: Constructor) => {
   options = clone(options)
-  defaults(options, { name: constructor.name.split(/controller$/i)[0] })
+  defaults(options, { name: constructor.name.split(/controller$/i)[0], prefix: '' })
   if (!options.plural) {
     options.plural = pluralize.plural(decamelize(options.name, '-'))
   }
-  if (options.prefix) {
-    options.path = path.join(options.prefix, options.plural)
-  } else {
-    options.path = options.plural
-  }
+  options.path = path.join('/', options.prefix, options.plural)
+
   return options
 }
 

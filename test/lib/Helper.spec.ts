@@ -3,8 +3,9 @@ import 'reflect-metadata'
 import { Controller } from '../../src/decorators/Controller'
 import { Param } from '../../src/decorators/Param'
 import { Delete, Get, Post, Put } from '../../src/decorators/Route'
-import { createAction, createRoute, createRoutes, setupController } from '../../src/lib/Helper'
-import { HttpStatus, ok, redirect } from '../../src/lib/HttpStatus'
+import { createAction, createController, createRoute, createRoutes } from '../../src/lib/Helper'
+import { ok, redirect } from '../../src/lib/HttpStatus'
+jest.disableAutomock()
 @Controller
 class TestController {
   @Post
@@ -298,39 +299,24 @@ describe('Helper', () => {
     it('should create the specific route', async () => {
       const route = createRoute(controller, 'sayHello')
       expect(route.method).toEqual('put')
-      expect(route.path).toEqual('/tests/hello')
+      expect(route.path).toEqual('/hello')
     })
   })
   describe('createRoutes', () => {
     it('should create all routes of controller', () => {
-      const routes = createRoutes(controller, 'sayHello')
+      const routes = createRoutes(controller)
       // tslint:disable-next-line:no-magic-numbers
-      expect(routes).toHaveLength(16)
+      expect(routes.toArray()).toHaveLength(16)
     })
   })
 
   describe('setupController', () => {
     it('should load the controller', () => {
-      const routes = {}
-      const router = {
-        get(path, action) {
-          routes['get:' + path] = { method: 'get', action }
-        },
-        put(path, action) {
-          routes['put:' + path] = { method: 'put', action }
-        },
-        post(path, action) {
-          routes['post:' + path] = { method: 'post', action }
-        },
-        delete(path, action) {
-          routes['delete:' + path] = { method: 'delete', action }
-        }
-      } as any
-      setupController(router, controller)
-      expect(routes['get:/tests'].method).toEqual('get')
-      expect(routes['delete:/tests'].method).toEqual('delete')
-      expect(routes['post:/tests/doSomething'].method).toEqual('post')
-      expect(routes['put:/tests/hello'].method).toEqual('put')
+      const router = createController(controller)
+      expect(router.routes['get:/tests'].method).toEqual('get')
+      expect(router.routes['delete:/tests'].method).toEqual('delete')
+      expect(router.routes['post:/tests/doSomething'].method).toEqual('post')
+      expect(router.routes['put:/tests/hello'].method).toEqual('put')
     })
   })
 })

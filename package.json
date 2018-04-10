@@ -54,6 +54,8 @@
     "boom": "^7.1.1",
     "decamelize": "^2.0.0",
     "immutable": "^4.0.0-rc.9",
+    "koa": "^2.5.0",
+    "koa-router": "^7.4.0",
     "lodash": "^4.17.5",
     "pluralize": "^7.0.0",
     "reflect-metadata": "^0.1.12",
