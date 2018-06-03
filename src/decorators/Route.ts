@@ -1,4 +1,3 @@
-import { Map } from 'immutable'
 import { clone, defaults } from 'lodash'
 import 'reflect-metadata'
 import { HttpMethod } from '../constants/HttpMethod'
@@ -27,23 +26,18 @@ const getRouteMetadata = (options: any, _: object, propertyKey: string) => {
   return metadata
 }
 
-const defineRouteMetadata = (metadata, target: object, propertyKey: string) => {
-  const routes: Map<string, IRouteMetadata> = Reflect.getMetadata(MetadataKey.ROUTES, target.constructor) || Map()
-  Reflect.defineMetadata(MetadataKey.ROUTES, routes.set(propertyKey, metadata), target.constructor)
-}
-
 export function Route(options: IRouteOptions): PropertyDecorator
 export function Route(target: object, propertyKey: string): void
 export function Route(value: any) {
   if (arguments.length === 1) {
     return (target: object, propertyKey: string) => {
       const metadata = getRouteMetadata(value, target, propertyKey)
-      defineRouteMetadata(metadata, target, propertyKey)
+      Reflect.defineMetadata(MetadataKey.ROUTE, metadata, target, propertyKey)
     }
   } else {
     const [target, propertyKey] = arguments
     const metadata = getRouteMetadata({}, target, propertyKey)
-    defineRouteMetadata(metadata, target, propertyKey)
+    Reflect.defineMetadata(MetadataKey.ROUTE, metadata, target, propertyKey)
   }
 }
 
@@ -62,12 +56,12 @@ function methodifyRouteDecorator(method: HttpMethod) {
       options.method = method
       return (target: object, propertyKey: string) => {
         const metadata = getRouteMetadata(options, target, propertyKey)
-        defineRouteMetadata(metadata, target, propertyKey)
+        Reflect.defineMetadata(MetadataKey.ROUTE, metadata, target, propertyKey)
       }
     } else {
       const [target, propertyKey] = arguments
       const metadata = getRouteMetadata({ method }, target, propertyKey)
-      defineRouteMetadata(metadata, target, propertyKey)
+      Reflect.defineMetadata(MetadataKey.ROUTE, metadata, target, propertyKey)
     }
   }
 }

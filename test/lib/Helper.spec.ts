@@ -1,4 +1,4 @@
-import { badRequest, Boom } from 'boom'
+import { badRequest } from 'boom'
 import 'reflect-metadata'
 import { Controller } from '../../src/decorators/Controller'
 import { Param } from '../../src/decorators/Param'

@@ -8,7 +8,6 @@ import { MetadataKey } from '../constants/MetadataKey'
 import { ICtrlMetadata } from '../decorators/Controller'
 import { IParamMetadata } from '../decorators/Param'
 import { IRouteMetadata } from '../decorators/Route'
-import { getSuperstruct } from '../lib/superstruct'
 import { HttpStatus } from './HttpStatus'
 
 const applyCtrlMiddlewares = (router: Router, middlewares: any[]) => {
@@ -21,6 +20,7 @@ const applyRouteMiddlewares = (router: Router, middlewares: any[], method: strin
     router[method](path, middleware)
   })
 }
+
 export function createController(controller: object) {
   const ctrlMetadata: ICtrlMetadata = Reflect.getMetadata(MetadataKey.CONTROLLER, controller.constructor)
   const router = new Router({ prefix: ctrlMetadata.path })
@@ -59,11 +59,7 @@ const getParams = (ctx: IRouterContext, paramsMetadata: List<IParamMetadata> = L
       case 'context':
         return ctx
       default:
-        value =
-          ctx.query[paramMeta.name] ||
-          (ctx.request.body && ctx.request.body[paramMeta.name]) ||
-          (ctx.params && ctx.params[paramMeta.name]) ||
-          ctx.header[paramMeta.name]
+        throw new TypeError('Invalid source:' + paramMeta.source)
     }
 
     if (paramMeta.required && !value) {
@@ -73,18 +69,17 @@ const getParams = (ctx: IRouterContext, paramsMetadata: List<IParamMetadata> = L
     if (!value) {
       return
     }
-    if (paramMeta.type !== 'string' && typeof value === 'string') {
+    if (paramMeta.schema.type !== 'string' && typeof value === 'string') {
       try {
         value = JSON.parse(value)
       } catch (err) {
         ctx.throw(401, `invalid argument "${paramMeta.name}": ${err}`)
       }
     }
-    if (typeof paramMeta.type === 'object') {
-      const struct = getSuperstruct()
-      const Schema = struct(paramMeta.type)
+    if (typeof paramMeta.schema.type === 'object') {
+      const struct = paramMeta.struct
       try {
-        value = Schema(value)
+        value = struct(value)
       } catch (ex) {
         throw Boom.badRequest(ex)
       }
@@ -116,7 +111,7 @@ const processRoute = async (ctx: IRouterContext, controller: object, propKey: st
 }
 
 export function createAction(controller: object, propKey: string) {
-  const paramsMetadata: List<IParamMetadata> = Reflect.getMetadata(MetadataKey.PARAMS, controller, propKey) || List()
+  const paramsMetadata: List<IParamMetadata> = Reflect.getOwnMetadata(MetadataKey.PARAM, controller, propKey) || List()
 
   const action = async (ctx: IRouterContext, next?: any) => {
     const args = getParams(ctx, paramsMetadata)
@@ -129,9 +124,10 @@ export function createAction(controller: object, propKey: string) {
 }
 
 export function createRoute(controller: any, propKey: string) {
-  const routesMetadata: Map<string, IRouteMetadata> =
-    Reflect.getMetadata(MetadataKey.ROUTES, controller.constructor) || Map()
-  const routeMetadata = routesMetadata.get(propKey) as IRouteMetadata
+  const routeMetadata: IRouteMetadata = Reflect.getOwnMetadata(controller, propKey)
+  if (!routeMetadata) {
+    return
+  }
   const action = createAction(controller, propKey)
   const urlPath = routeMetadata.path ? nodepath.join('/', routeMetadata.path) : ''
   return { method: routeMetadata.method.toLowerCase(), path: urlPath, action, middleware: { before: [], after: [] } }
@@ -139,11 +135,10 @@ export function createRoute(controller: any, propKey: string) {
 
 export function createRoutes(controller: any): List<any> {
   const routes: List<any> = List()
-  const routesMetadata = Reflect.getMetadata(MetadataKey.ROUTES, controller.constructor) as Map<string, IRouteMetadata>
-
+  const props = Object.getOwnPropertyNames(controller)
   return routes.withMutations((rs) => {
-    for (const propKey of routesMetadata.keys()) {
-      rs.push(createRoute(controller, propKey))
+    for (const prop of props) {
+      rs.push(createRoute(controller, prop))
     }
   })
 }
