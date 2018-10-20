@@ -2,13 +2,13 @@ import Boom from 'boom'
 import { List, Map } from 'immutable'
 import Router, { IRouterContext } from 'koa-router'
 import { get } from 'lodash'
-import nodepath from 'path'
 import 'reflect-metadata'
 import { MetadataKey } from '../constants/MetadataKey'
-import { ICtrlMetadata } from '../decorators/Controller'
 import { IParamMetadata } from '../decorators/Param'
 import { IRouteMetadata } from '../decorators/Route'
+import { Constructor } from '../types/Constructor'
 import { HttpStatus } from './HttpStatus'
+import { getOwnPropertyNames, loadControllerClasses } from './util'
 
 const applyCtrlMiddlewares = (router: Router, middlewares: any[]) => {
   middlewares.forEach((middleware) => {
@@ -21,13 +21,13 @@ const applyRouteMiddlewares = (router: Router, middlewares: any[], method: strin
   })
 }
 
-export function createController(controller: object) {
-  const ctrlMetadata: ICtrlMetadata = Reflect.getMetadata(MetadataKey.CONTROLLER, controller.constructor)
-  const router = new Router({ prefix: ctrlMetadata.path })
+export function createController(controller: Constructor) {
+  const router = new Router()
   const ctrlMiddlewares: Map<string, any[]> = Map()
   const beforeCtrlMiddlewares = ctrlMiddlewares.get('before') || []
   applyCtrlMiddlewares(router, beforeCtrlMiddlewares)
-  const routes = createRoutes(controller)
+  const routes = createRoutes(new controller())
+
   routes.forEach((route) => {
     const beforeRouteMiddlewares = get(route, 'middlewares.before', [])
     applyRouteMiddlewares(router, beforeRouteMiddlewares, route.method, route.path)
@@ -73,72 +73,89 @@ const getParams = (ctx: IRouterContext, paramsMetadata: List<IParamMetadata> = L
       try {
         value = JSON.parse(value)
       } catch (err) {
-        ctx.throw(401, `invalid argument "${paramMeta.name}": ${err}`)
+        ctx.throw(400, `invalid value for argument "${paramMeta.name}"`)
       }
     }
-    if (typeof paramMeta.schema.type === 'object') {
-      const struct = paramMeta.struct
-      try {
-        value = struct(value)
-      } catch (ex) {
-        throw Boom.badRequest(ex)
-      }
+    const struct = paramMeta.struct
+    try {
+      value = struct(value)
+    } catch (ex) {
+      throw Boom.badRequest(ex)
     }
     return value
   })
 }
 
 const processRoute = async (ctx: IRouterContext, controller: object, propKey: string, args: any[]) => {
-  try {
-    const response = await controller[propKey].apply(controller, args)
-    if (response instanceof HttpStatus) {
+  const response = await controller[propKey].apply(controller, args)
+  if (response instanceof HttpStatus) {
+    ctx.status = response.statusCode
+    ctx.body = response.body
+    if (response.redirectUrl) {
       ctx.status = response.statusCode
-      ctx.body = response.body
-      if (response.redirectUrl) {
-        ctx.status = response.statusCode
-        ctx.redirect(response.redirectUrl)
-      }
-    } else {
-      ctx.body = response
+      ctx.redirect(response.redirectUrl)
     }
-  } catch (err) {
-    if (Boom.isBoom(err)) {
-      ctx.throw(err.output.statusCode, err.message)
-    } else {
-      throw err
-    }
+  } else {
+    ctx.body = response
   }
 }
 
 export function createAction(controller: object, propKey: string) {
-  const paramsMetadata: List<IParamMetadata> = Reflect.getOwnMetadata(MetadataKey.PARAM, controller, propKey) || List()
+  const paramsMetadata: List<IParamMetadata> =
+    Reflect.getOwnMetadata(MetadataKey.PARAM, Reflect.getPrototypeOf(controller), propKey) || List()
 
   const action = async (ctx: IRouterContext, next?: any) => {
-    const args = getParams(ctx, paramsMetadata)
-    await processRoute(ctx, controller, propKey, args.toArray())
-    if (next) {
-      await next()
+    try {
+      const args = getParams(ctx, paramsMetadata)
+      await processRoute(ctx, controller, propKey, args.toArray())
+      if (next) {
+        await next()
+      }
+    } catch (err) {
+      if (Boom.isBoom(err)) {
+        ctx.throw(err.output.statusCode, err.message)
+      } else {
+        throw err
+      }
     }
   }
   return action
 }
 
-export function createRoute(controller: any, propKey: string) {
-  const routeMetadata: IRouteMetadata = Reflect.getOwnMetadata(controller, propKey)
+export function createRoute(controller: object, propKey: string) {
+  const routeMetadata: IRouteMetadata = Reflect.getOwnMetadata(
+    MetadataKey.ROUTE,
+    Reflect.getPrototypeOf(controller),
+    propKey
+  )
   if (!routeMetadata) {
     return
   }
   const action = createAction(controller, propKey)
-  const urlPath = routeMetadata.path ? nodepath.join('/', routeMetadata.path) : ''
-  return { method: routeMetadata.method.toLowerCase(), path: urlPath, action, middleware: { before: [], after: [] } }
+  return {
+    method: routeMetadata.method.toLowerCase(),
+    path: routeMetadata.path,
+    action,
+    middleware: { before: [], after: [] }
+  }
 }
 
-export function createRoutes(controller: any): List<any> {
+export function createRoutes(controller: object): List<any> {
   const routes: List<any> = List()
-  const props = Object.getOwnPropertyNames(controller)
+  const props = getOwnPropertyNames(Reflect.getPrototypeOf(controller))
   return routes.withMutations((rs) => {
     for (const prop of props) {
       rs.push(createRoute(controller, prop))
     }
   })
+}
+
+export const loadControllers = async (ctrlDirs: string, existingRouter?: Router) => {
+  const router = existingRouter ? existingRouter : new Router()
+  const ctrls = await loadControllerClasses(ctrlDirs)
+  ctrls.forEach((item) => {
+    const ctrl = createController(item)
+    router.use(ctrl.routes(), ctrl.allowedMethods())
+  })
+  return router
 }

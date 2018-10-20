@@ -9,7 +9,6 @@ export const loadControllerClasses = async (ctrlDir: string): Promise<any[]> => 
 
   for (let path of paths) {
     path = nodepath.resolve(ctrlDir, path)
-
     const stat = fs.lstatSync(path)
     if (stat.isDirectory()) {
       ctrls.push(...(await loadControllerClasses(path)))
@@ -20,7 +19,7 @@ export const loadControllerClasses = async (ctrlDir: string): Promise<any[]> => 
         if (metadata) {
           ctrls.push(ctrl)
         }
-      } catch {
+      } catch (err) {
         // ignore the error
       }
     }
@@ -70,7 +69,8 @@ const normalizeProp = (decoratedProp: string): [string, boolean] => {
 
 const _convertSchemaToJsonSchema = (schema: any): [any, boolean] => {
   if (typeof schema === 'string') {
-    return normalizeType(schema)
+    const [type, required] = normalizeType(schema)
+    return [{ type }, required]
   } else if (Array.isArray(schema)) {
     const propSchema: any = { type: 'array' }
     if (schema.length > 0 && schema[0]) {
@@ -126,7 +126,7 @@ const isPrimitiveType = (type: string) => {
   }
 }
 
-const structSchemaFromJsonSchema = (schema: IJsonSchema, required: boolean = false) => {
+export const structSchemaFromJsonSchema = (schema: IJsonSchema, required: boolean = false) => {
   let structSchema: any = {}
   if (isPrimitiveType(schema.type)) {
     structSchema = schema.type
@@ -157,6 +157,6 @@ const structSchemaFromJsonSchema = (schema: IJsonSchema, required: boolean = fal
   }
 }
 
-export const createStructFromJsonSchema = (schema: IJsonSchema) => {
-  return structSchemaFromJsonSchema(schema)
+export const getOwnPropertyNames = (prototype: object) => {
+  return Object.getOwnPropertyNames(prototype).filter((prop) => prop !== 'constructor')
 }

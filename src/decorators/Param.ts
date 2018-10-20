@@ -2,7 +2,7 @@ import { List } from 'immutable'
 import { clone, defaults } from 'lodash'
 import 'reflect-metadata'
 import { MetadataKey } from '../constants/MetadataKey'
-import { createStructFromJsonSchema, IJsonSchema, normalizeSchema } from '../lib/util'
+import { IJsonSchema, normalizeSchema, structSchemaFromJsonSchema } from '../lib/util'
 export interface IParamOptions {
   name: string
   source?: 'query' | 'path' | 'header' | 'body' | 'context'
@@ -25,16 +25,15 @@ export interface IParamMetadata {
 
 const getParamMetadata = (options: any, index: number, target: object, propertyKey: string) => {
   options = clone(options)
-  defaults(options, { name: propertyKey, source: 'query', type: 'string', required: false, root: false })
-  options.schema = normalizeSchema(options.type)
-  options.struct = createStructFromJsonSchema(options.schema)
   const paramsMetadata: List<any> = Reflect.getOwnMetadata(MetadataKey.PARAM, target, propertyKey) || List()
   if (paramsMetadata.has(index)) {
     const existingOptions = paramsMetadata.get(index) || {}
-    return Object.assign({}, existingOptions, options)
-  } else {
-    return options
+    options = Object.assign({}, existingOptions, options)
   }
+  defaults(options, { name: propertyKey, source: 'query', type: 'string', required: false, root: false })
+  options.schema = normalizeSchema(options.type)
+  options.struct = structSchemaFromJsonSchema(options.schema, options.required)
+  return options
 }
 
 const defineParamMetadata = (options: any, index: number, target: object, propertyKey: string) => {

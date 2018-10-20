@@ -62,7 +62,7 @@ const normalizeParameters = (params: List<IParamMetadata>) => {
   const bodyParams = params.filter((item) => {
     return item.source === 'body'
   })
-  let requestBody = {} as any
+  let requestBody = undefined as any
   if (!bodyParams.isEmpty()) {
     const rootParam = params.find((item) => item.root)
     if (rootParam) {
